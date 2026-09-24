@@ -30,3 +30,6 @@
 - GlobalExceptionHandler con manejo de errores de negocio y validacion
 - Tests de servicio (CarritoServiceTest)
 - Health check via Spring Actuator
+
+[2.0.0]: https://github.com/DavNat13/calisat-ms-carrito/compare/v1.3.0...v2.0.0
+[1.3.0]: https://github.com/DavNat13/calisat-ms-carrito/releases/tag/v1.3.0
