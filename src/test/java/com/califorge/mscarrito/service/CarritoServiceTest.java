@@ -1,0 +1,227 @@
+package com.califorge.mscarrito.service;
+
+import com.califorge.mscarrito.dto.CarritoItemRequest;
+import com.califorge.mscarrito.dto.CarritoResponse;
+import com.califorge.mscarrito.exception.CantidadInvalidaException;
+import com.califorge.mscarrito.exception.ItemCarritoNoEncontradoException;
+import com.califorge.mscarrito.model.Carrito;
+import com.califorge.mscarrito.model.CarritoItem;
+import com.califorge.mscarrito.model.EstadoCarrito;
+import com.califorge.mscarrito.repository.CarritoItemRepository;
+import com.califorge.mscarrito.repository.CarritoRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class CarritoServiceTest {
+
+    private static final String SUB = "sub-azure-1";
+
+    @Mock
+    private CarritoRepository carritoRepository;
+
+    @Mock
+    private CarritoItemRepository carritoItemRepository;
+
+    @InjectMocks
+    private CarritoService carritoService;
+
+    @Test
+    void obtenerPorUsuario_creaCarritoSiNoExiste() {
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.empty());
+        when(carritoRepository.save(any(Carrito.class))).thenAnswer(invocation -> {
+            Carrito guardado = invocation.getArgument(0);
+            guardado.setId(UUID.randomUUID());
+            guardado.setFechaCreacion(LocalDateTime.of(2026, 9, 23, 10, 0));
+            guardado.setFechaActualizacion(LocalDateTime.of(2026, 9, 23, 10, 0));
+            return guardado;
+        });
+        when(carritoItemRepository.findByCarritoId(any(UUID.class))).thenReturn(List.of());
+
+        CarritoResponse response = carritoService.obtenerPorUsuario(SUB);
+
+        assertEquals(SUB, response.usuarioSub());
+        assertEquals(EstadoCarrito.ABIERTO, response.estado());
+        assertTrue(response.items().isEmpty());
+        assertTrue(response.advertencias().isEmpty());
+        verify(carritoRepository).save(any(Carrito.class));
+    }
+
+    @Test
+    void obtenerPorUsuario_devuelveElCarritoExistenteSinCrearOtro() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoId(carrito.getId()))
+                .thenReturn(List.of(item(carrito, "SKU-1", 2)));
+
+        CarritoResponse response = carritoService.obtenerPorUsuario(SUB);
+
+        assertEquals(carrito.getId(), response.id());
+        assertEquals(1, response.items().size());
+        assertEquals("SKU-1", response.items().get(0).sku());
+        verify(carritoRepository, never()).save(any(Carrito.class));
+    }
+
+    @Test
+    void agregarItem_sumaLaCantidadCuandoElSkuYaExiste() {
+        Carrito carrito = carritoExistente();
+        CarritoItem existente = item(carrito, "SKU-1", 2);
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoIdAndSku(carrito.getId(), "SKU-1"))
+                .thenReturn(Optional.of(existente));
+        when(carritoItemRepository.save(any(CarritoItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CarritoItem resultado = carritoService.agregarItem(SUB, new CarritoItemRequest("SKU-1", 3));
+
+        assertEquals(5, resultado.getCantidad());
+        assertEquals("SKU-1", resultado.getSku());
+        assertNull(resultado.getPrecioUnitarioVisto());
+    }
+
+    @Test
+    void agregarItem_creaElItemCuandoElSkuNoExiste() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoIdAndSku(carrito.getId(), "SKU-2"))
+                .thenReturn(Optional.empty());
+        when(carritoItemRepository.save(any(CarritoItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CarritoItem resultado = carritoService.agregarItem(SUB, new CarritoItemRequest("SKU-2", 4));
+
+        ArgumentCaptor<CarritoItem> captor = ArgumentCaptor.forClass(CarritoItem.class);
+        verify(carritoItemRepository).save(captor.capture());
+        CarritoItem guardado = captor.getValue();
+        assertEquals("SKU-2", guardado.getSku());
+        assertEquals(4, guardado.getCantidad());
+        assertSame(carrito, guardado.getCarrito());
+        assertEquals(4, resultado.getCantidad());
+    }
+
+    @Test
+    void actualizarItem_reemplazaLaCantidad() {
+        Carrito carrito = carritoExistente();
+        CarritoItem existente = item(carrito, "SKU-1", 2);
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoIdAndSku(carrito.getId(), "SKU-1"))
+                .thenReturn(Optional.of(existente));
+        when(carritoItemRepository.save(any(CarritoItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CarritoItem resultado = carritoService.actualizarItem(SUB, "SKU-1", 7);
+
+        assertEquals(7, resultado.getCantidad());
+    }
+
+    @Test
+    void actualizarItem_lanza404CuandoElSkuNoEstaEnElCarrito() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoIdAndSku(carrito.getId(), "SKU-404"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ItemCarritoNoEncontradoException.class,
+                () -> carritoService.actualizarItem(SUB, "SKU-404", 2));
+    }
+
+    @Test
+    void actualizarItem_lanza400CuandoLaCantidadNoEsPositiva() {
+        assertThrows(CantidadInvalidaException.class,
+                () -> carritoService.actualizarItem(SUB, "SKU-1", 0));
+        verifyNoInteractions(carritoRepository, carritoItemRepository);
+    }
+
+    @Test
+    void eliminarItem_lanza404CuandoElSkuNoEstaEnElCarrito() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoIdAndSku(carrito.getId(), "SKU-404"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ItemCarritoNoEncontradoException.class,
+                () -> carritoService.eliminarItem(SUB, "SKU-404"));
+    }
+
+    @Test
+    void eliminarItem_borraElItemExistente() {
+        Carrito carrito = carritoExistente();
+        CarritoItem existente = item(carrito, "SKU-1", 2);
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoIdAndSku(carrito.getId(), "SKU-1"))
+                .thenReturn(Optional.of(existente));
+
+        carritoService.eliminarItem(SUB, "SKU-1");
+
+        verify(carritoItemRepository).delete(existente);
+    }
+
+    @Test
+    void vaciar_borraTodosLosItemsDelCarrito() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+
+        carritoService.vaciar(SUB);
+
+        verify(carritoItemRepository).deleteByCarritoId(carrito.getId());
+    }
+
+    @Test
+    void validar_devuelveAdvertenciaDeCarritoVacio() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoId(carrito.getId())).thenReturn(List.of());
+
+        CarritoResponse response = carritoService.validar(SUB);
+
+        assertTrue(response.advertencias().stream().anyMatch(a -> a.contains("vacio")));
+    }
+
+    @Test
+    void validar_incluyeCantidadTotalYPreciosSinVerificar() {
+        Carrito carrito = carritoExistente();
+        when(carritoRepository.findByUsuarioSub(SUB)).thenReturn(Optional.of(carrito));
+        when(carritoItemRepository.findByCarritoId(carrito.getId()))
+                .thenReturn(List.of(item(carrito, "SKU-1", 3), item(carrito, "SKU-2", 4)));
+
+        CarritoResponse response = carritoService.validar(SUB);
+
+        assertEquals(2, response.items().size());
+        assertTrue(response.advertencias().stream().anyMatch(a -> a.contains("Cantidad total de unidades: 7")));
+        assertTrue(response.advertencias().stream().anyMatch(a -> a.contains("SKU-1") && a.contains("precio")));
+    }
+
+    private Carrito carritoExistente() {
+        Carrito carrito = new Carrito();
+        carrito.setId(UUID.randomUUID());
+        carrito.setUsuarioSub(SUB);
+        carrito.setEstado(EstadoCarrito.ABIERTO);
+        carrito.setFechaCreacion(LocalDateTime.of(2026, 9, 23, 10, 0));
+        carrito.setFechaActualizacion(LocalDateTime.of(2026, 9, 23, 10, 0));
+        return carrito;
+    }
+
+    private CarritoItem item(Carrito carrito, String sku, int cantidad) {
+        CarritoItem item = new CarritoItem(carrito, sku, cantidad);
+        item.setId(UUID.randomUUID());
+        item.setFechaAgregado(LocalDateTime.of(2026, 9, 23, 10, 0));
+        return item;
+    }
+}

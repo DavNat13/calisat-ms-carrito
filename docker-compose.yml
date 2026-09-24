@@ -1,0 +1,44 @@
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: calisat-db-carrito
+    environment:
+      POSTGRES_DB: calisat_carrito
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - calisat_carrito_data:/var/lib/postgresql/data
+    networks:
+      - calisat-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d calisat_carrito"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: calisat-ms-carrito
+    ports:
+      - "8084:8080"
+    environment:
+      # Dentro de la red compose el Postgres se resuelve por nombre de servicio
+      # y la app escucha en 8080 (imagen estandar); en host usa localhost:5433:8084.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/calisat_carrito
+      SERVER_PORT: "8080"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - calisat-net
+
+networks:
+  calisat-net:
+    driver: bridge
+
+volumes:
+  calisat_carrito_data:
