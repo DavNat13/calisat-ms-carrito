@@ -27,6 +27,20 @@ public class GlobalExceptionHandler {
                 .body(Map.of("mensaje", ex.getMessage()));
     }
 
+    @ExceptionHandler(SkuNoEncontradoException.class)
+    public ResponseEntity<Map<String, Object>> skuNoEncontrado(SkuNoEncontradoException ex) {
+        log.warn("SKU rechazado por catalogo: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("mensaje", ex.getMessage()));
+    }
+
+    @ExceptionHandler(StockInsuficienteException.class)
+    public ResponseEntity<Map<String, Object>> stockInsuficiente(StockInsuficienteException ex) {
+        log.warn("Alta de item rechazada por stock insuficiente: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("mensaje", ex.getMessage()));
+    }
+
     @ExceptionHandler(CantidadInvalidaException.class)
     public ResponseEntity<Map<String, Object>> cantidadInvalida(CantidadInvalidaException ex) {
         log.warn("Cantidad invalida rechazada: {}", ex.getMessage());
