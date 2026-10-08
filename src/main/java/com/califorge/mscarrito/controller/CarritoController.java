@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,7 +21,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -37,14 +40,41 @@ public class CarritoController {
     }
 
     /**
+     * Sub (propietario) sobre el que operar.
+     *
+     * <ul>
+     *   <li>Con JWT: el sub del token (el cliente del panel/tienda).</li>
+     *   <li>Sin JWT pero con rol SERVICIO (llamada MS->MS con
+     *       X-Service-Token): el sub viene en el query param
+     *       {@code usuarioSub}, que es lo que envian ms-orden al vaciar el
+     *       carrito y ms-notificaciones al buscar carritos abandonados.</li>
+     * </ul>
+     */
+    private String subPropietario(Jwt jwt, String usuarioSub) {
+        if (jwt != null) {
+            return jwt.getSubject();
+        }
+        if (usuarioSub != null && !usuarioSub.isBlank()) {
+            return usuarioSub.trim();
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Se requiere el parametro 'usuarioSub' cuando no hay JWT (llamada de servicio).");
+    }
+
+    /**
      * GET /api/v1/carrito
      * Devuelve el carrito propio del usuario autenticado (sub del JWT).
-     * Crea el carrito vacio si aun no existe (upsert lazy). Requiere JWT.
+     * Crea el carrito vacio si aun no existe (upsert lazy). Requiere JWT
+     * o, para llamadas MS->MS, el rol SERVICIO + el param usuarioSub.
      */
-    @Operation(summary = "Obtener carrito propio", description = "Devuelve el carrito del usuario autenticado (sub del JWT). Si no existe se crea vacio con estado ABIERTO. Requiere JWT; sin roles.")
+    @Operation(summary = "Obtener carrito propio",
+            description = "Devuelve el carrito del usuario autenticado (sub del JWT). Si no existe se crea vacio con estado ABIERTO. Requiere JWT; sin roles. Las llamadas MS->MS (rol SERVICIO) pasan el propietario en el query param usuarioSub.")
     @GetMapping
-    public ResponseEntity<CarritoResponse> obtenerCarrito(@AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(carritoService.obtenerPorUsuario(jwt.getSubject()));
+    public ResponseEntity<CarritoResponse> obtenerCarrito(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String usuarioSub,
+            @RequestParam(required = false) String estado) {
+        return ResponseEntity.ok(carritoService.obtenerPorUsuario(subPropietario(jwt, usuarioSub)));
     }
 
     /**
@@ -102,10 +132,12 @@ public class CarritoController {
      * Vacia todos los items del carrito propio. 204 siempre (idempotente).
      * Requiere JWT.
      */
-    @Operation(summary = "Vaciar carrito", description = "Elimina todos los items del carrito del usuario. 204 siempre (idempotente, aunque ya estuviera vacio). Requiere JWT.")
+    @Operation(summary = "Vaciar carrito",
+            description = "Elimina todos los items del carrito del usuario. 204 siempre (idempotente, aunque ya estuviera vacio). Requiere JWT; las llamadas MS->MS (rol SERVICIO) usan el query param usuarioSub.")
     @DeleteMapping
-    public ResponseEntity<Void> vaciar(@AuthenticationPrincipal Jwt jwt) {
-        carritoService.vaciar(jwt.getSubject());
+    public ResponseEntity<Void> vaciar(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String usuarioSub) {
+        carritoService.vaciar(subPropietario(jwt, usuarioSub));
         return ResponseEntity.noContent().build();
     }
 

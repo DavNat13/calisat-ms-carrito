@@ -3,6 +3,7 @@ package com.califorge.mscarrito.config;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,6 +18,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -33,6 +35,10 @@ public class SecurityConfig {
 
     private static final String ALLOWED_ORIGIN =
             "https://ezeh839whh.execute-api.us-east-1.amazonaws.com";
+
+    /** Credencial MS->MS (misma clave que publican los demas microservicios). */
+    @Value("${calisat.servicio.token:}")
+    private String tokenDeServicio;
 
     @Bean
     public JwtDecoder jwtDecoder() {
@@ -86,14 +92,20 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers("/api/v1/carrito", "/api/v1/carrito/**").hasAnyRole("CLIENTE")
+                // Carrito del usuario: JWT con rol CLIENTE. Las llamadas
+                // servidor a servidor (orden vacia/lee, notificaciones lee
+                // carritos abandonados) llegan con X-Service-Token -> SERVICIO.
+                .requestMatchers("/api/v1/carrito", "/api/v1/carrito/**")
+                        .hasAnyRole("CLIENTE", "SERVICIO")
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt
                     .decoder(jwtDecoder())
                     .jwtAuthenticationConverter(jwtAuthenticationConverter()))
-            );
+            )
+            .addFilterBefore(new ServiceTokenFilter(tokenDeServicio),
+                    UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

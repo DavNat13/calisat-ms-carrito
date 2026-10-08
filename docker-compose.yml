@@ -19,6 +19,9 @@ services:
       retries: 5
 
   app:
+    # Perfil local: activa application-local.yaml (URLs por nombre de servicio).
+    command: ["java","-XX:+UseContainerSupport","-XX:MaxRAMPercentage=75.0",
+              "-jar","app.jar","--spring.profiles.active=local"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -38,6 +41,9 @@ services:
 
 networks:
   calisat-net:
+    # Nombre fijo: los 7 compose comparten esta misma red para que los
+    # microservicios se vean entre si en local (sin IPs, por nombre de servicio).
+    name: calisat-net
     driver: bridge
 
 volumes:

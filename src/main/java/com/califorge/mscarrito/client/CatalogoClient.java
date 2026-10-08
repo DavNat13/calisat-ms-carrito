@@ -13,8 +13,7 @@ import java.util.Optional;
 
 /**
  * Cliente HTTP de calisat-ms-catalogo (fase B). Sin service discovery:
- * la base URL se fija con la variable CALISAT_CATALOGO_URL (default
- * localhost:8082, el mapeo de puertos del compose de catalogo).
+ * la base URL es calisat.gateway.url (el API Gateway; cero IPs en el repo).
  *
  * <p>Resiliencia: un 404 del catalogo es un rechazo de negocio real
  * ({@link SkuNoEncontradoException} -> HTTP 404 en el carrito); cualquier
@@ -30,7 +29,7 @@ public class CatalogoClient {
     private final String baseUrl;
 
     public CatalogoClient(RestTemplate restTemplate,
-                          @Value("${CALISAT_CATALOGO_URL:http://localhost:8082}") String baseUrl) {
+                          @Value("${calisat.urls.catalogo:${calisat.gateway.url}}") String baseUrl) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
     }
