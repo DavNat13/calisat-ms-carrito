@@ -47,7 +47,7 @@ public class SecurityConfig {
                 // servidor a servidor (orden vacia/lee, notificaciones lee
                 // carritos abandonados) llegan con X-Service-Token -> SERVICIO.
                 .requestMatchers("/api/v1/carrito", "/api/v1/carrito/**")
-                        .hasAnyRole("CLIENTE", "SERVICIO")
+                        .hasAnyRole("CLIENTE", "SERVICIO", "ADMINISTRADOR")
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
