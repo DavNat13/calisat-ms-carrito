@@ -65,6 +65,8 @@ app:
           audiences:
             - d221f0d2-1a7c-4872-ad6c-367a1f0717ec
             - api://d221f0d2-1a7c-4872-ad6c-367a1f0717ec
+          # CA-02: un usuario Entra sin claim 'roles' no debe recibir 403 en el carrito
+          default-role: CLIENTE
 
         # AWS Cognito - accesos desde clientes moviles/terceros
         - name: cognito
@@ -82,3 +84,4 @@ app:
           # se asigna a TODOS los tokens de Cognito, ademas de "cognito:groups"
           # si el token lo trajera.
           default-role: CLIENTE
+
