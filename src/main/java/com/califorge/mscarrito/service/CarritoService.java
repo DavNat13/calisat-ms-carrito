@@ -34,6 +34,10 @@ import java.util.Optional;
 @Transactional
 public class CarritoService {
 
+    /** Opcional: publica el evento "cart" en Kafka (interacciones-user). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private InteraccionPublisher interacciones;
+
     private final CarritoRepository carritoRepository;
     private final CarritoItemRepository carritoItemRepository;
     private final CatalogoClient catalogoClient;
@@ -77,6 +81,9 @@ public class CarritoService {
         validarYSnapshotear(item);
         CarritoItem guardado = carritoItemRepository.save(item);
         marcarActualizacion(carrito);
+        if (interacciones != null) {
+            interacciones.publicar(azureSub, request.sku(), InteraccionPublisher.CART, null);
+        }
         return guardado;
     }
 
