@@ -1,5 +1,17 @@
 # Changelog - calisat-ms-carrito
 
+## [2.2.0] - 2026-11-18
+
+### Added
+- Dependencia `spring-kafka` y productor de interacciones (`KafkaProducerConfig`, `InteraccionPublisher`, `InteraccionEvent`) contra el tópico `interacciones-user`
+- Al agregar un ítem al carrito se publica el evento `cart` en Kafka (best-effort: un fallo de Kafka no rompe la operación)
+
+### Fixed
+- `AudienceValidator` acepta el claim `client_id` de los access tokens de Cognito además de `aud`
+- Los tokens de Entra ID sin claim `roles` reciben el rol por defecto `CLIENTE`, evitando el 403 en el carrito (CA-02)
+- CORS admite la cabecera `Idempotency-Key`
+- Versión pom.xml actualizada a 2.2.0
+
 ## [2.1.0] - 2026-09-24
 
 ### Added
