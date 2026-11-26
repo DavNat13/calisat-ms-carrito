@@ -1,5 +1,10 @@
 # Changelog - calisat-ms-carrito
 
+## [2.2.1] - 2026-11-25
+
+### Fixed
+- Bootstrap de Kafka y URLs de catálogo e inventario configurables en `docker-compose.yml` para el despliegue en 9 instancias.
+
 ## [2.2.0] - 2026-11-18
 
 ### Added
